@@ -1,122 +1,159 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
-use App\Models\User;
+use App\Models\HourlyUsage;
 use App\Models\Node;
+use App\Models\Paylist;
+use App\Models\User;
 use App\Utils\Tools;
+use function array_fill;
+use function date;
+use function floatval;
+use function is_null;
+use function json_decode;
+use function round;
+use function strtotime;
+use function time;
 
-class Analytics
+final class Analytics
 {
-    public function getTotalUser()
+    /**
+     * 获取累计收入
+     */
+    public static function getIncome(string $req): float
     {
-        return User::count();
+        $today = strtotime('00:00:00');
+        $paylist = new Paylist();
+        $number = match ($req) {
+            'today' => $paylist->where('status', 1)
+                ->whereBetween('datetime', [$today, time()])
+                ->sum('total'),
+            'yesterday' => $paylist->where('status', 1)
+                ->whereBetween('datetime', [strtotime('-1 day', $today), $today])
+                ->sum('total'),
+            'this month' => $paylist->where('status', 1)
+                ->whereBetween('datetime', [strtotime('first day of this month 00:00:00'), time()])
+                ->sum('total'),
+            default => $paylist->where('status', 1)->sum('total'),
+        };
+
+        return is_null($number) ? 0.00 : round(floatval($number), 2);
     }
 
-    public function getCheckinUser()
+    public static function getTotalUser(): int
     {
-        return User::where('last_check_in_time', '>', 0)->count();
+        return (new User())->count();
     }
 
-    public function getTodayCheckinUser()
+    public static function getCheckinUser(): int
     {
-        return User::where('last_check_in_time', '>', strtotime('today'))->count();
+        return (new User())->where('last_check_in_time', '>', 0)->count();
     }
 
-    public function getTrafficUsage()
+    public static function getTodayCheckinUser(): int
     {
-        $total = User::sum('u') + User::sum('d');
-        return Tools::flowAutoShow($total);
+        return (new User())->where('last_check_in_time', '>', strtotime('today'))->count();
     }
 
-    public function getTodayTrafficUsage()
+    public static function getTrafficUsage(): string
     {
-        $total = User::sum('u') + User::sum('d') - User::sum('last_day_t');
-        return Tools::flowAutoShow($total);
+        return Tools::autoBytes((new User())->sum('u') + (new User())->sum('d'));
     }
 
-
-    public function getRawTodayTrafficUsage()
+    public static function getTodayTrafficUsage(): string
     {
-        return User::sum('u') + User::sum('d') - User::sum('last_day_t');
+        return Tools::autoBytes((new User())->sum('transfer_today'));
     }
 
-    public function getLastTrafficUsage()
+    public static function getRawTodayTrafficUsage(): int
     {
-        $total = User::sum('last_day_t');
-        return Tools::flowAutoShow($total);
+        return (new User())->sum('transfer_today');
     }
 
-
-    public function getRawLastTrafficUsage()
+    public static function getRawGbTodayTrafficUsage(): float
     {
-        return User::sum('last_day_t');
+        return Tools::bToGB((new User())->sum('transfer_today'));
     }
 
-    public function getUnusedTrafficUsage()
+    public static function getLastTrafficUsage(): string
     {
-        $total = User::sum('transfer_enable') - User::sum('u') - User::sum('d');
-        return Tools::flowAutoShow($total);
+        return Tools::autoBytes((new User())->sum('u') + (new User())->sum('d') - (new User())->sum('transfer_today'));
     }
 
-    public function getRawUnusedTrafficUsage()
+    public static function getRawLastTrafficUsage(): int
     {
-        return User::sum('transfer_enable') - User::sum('u') - User::sum('d');
+        return (new User())->sum('u') + (new User())->sum('d') - (new User())->sum('transfer_today');
     }
 
-
-    public function getTotalTraffic()
+    public static function getRawGbLastTrafficUsage(): float
     {
-        $total = User::sum('transfer_enable');
-        return Tools::flowAutoShow($total);
+        return Tools::bToGB((new User())->sum('u') + (new User())->sum('d') - (new User())->sum('transfer_today'));
     }
 
-    public function getRawTotalTraffic()
+    public static function getUnusedTrafficUsage(): string
     {
-        return User::sum('transfer_enable');
+        return Tools::autoBytes((new User())->sum('transfer_enable') - (new User())->sum('u') - (new User())->sum('d'));
     }
 
-    public function getOnlineUser($time)
+    public static function getRawUnusedTrafficUsage(): int
     {
-        $time = time() - $time;
-        return User::where('t', '>', $time)->count();
+        return (new User())->sum('transfer_enable') - (new User())->sum('u') - (new User())->sum('d');
     }
 
-    public function getUnusedUser()
+    public static function getRawGbUnusedTrafficUsage(): float
     {
-        return User::where('t', '=', 0)->count();
+        return Tools::bToGB((new User())->sum('transfer_enable') - (new User())->sum('u') - (new User())->sum('d'));
     }
 
-    public function getTotalNode()
+    public static function getTotalTraffic(): string
     {
-        return Node::count();
+        return Tools::autoBytes((new User())->sum('transfer_enable'));
     }
 
-    public function getTotalNodes()
+    public static function getRawTotalTraffic(): int
     {
-        return Node::where('node_heartbeat', '>', 0)->where(
-            static function ($query) {
-                $query->Where('sort', '=', 0)
-                    ->orWhere('sort', '=', 10)
-                    ->orWhere('sort', '=', 11)
-                    ->orWhere('sort', '=', 12)
-                    ->orWhere('sort', '=', 13)
-                    ->orWhere('sort', '=', 14);
-            }
-        )->count();
+        return (new User())->sum('transfer_enable');
     }
 
-    public function getAliveNodes()
+    public static function getRawGbTotalTraffic(): float
     {
-        return Node::where(
-            static function ($query) {
-                $query->Where('sort', '=', 0)
-                    ->orWhere('sort', '=', 10)
-                    ->orWhere('sort', '=', 11)
-                    ->orWhere('sort', '=', 12)
-                    ->orWhere('sort', '=', 13)
-                    ->orWhere('sort', '=', 14);
-            }
-        )->where('node_heartbeat', '>', time() - 90)->count();
+        return Tools::bToGB((new User())->sum('transfer_enable'));
+    }
+
+    public static function getTotalNode(): int
+    {
+        return (new Node())->where('node_heartbeat', '>', 0)->count();
+    }
+
+    public static function getAliveNode(): int
+    {
+        return (new Node())->where('node_heartbeat', '>', time() - 90)->count();
+    }
+
+    public static function getInactiveUser(): int
+    {
+        return (new User())->where('is_inactive', 1)->count();
+    }
+
+    public static function getActiveUser(): int
+    {
+        return (new User())->where('is_inactive', 0)->count();
+    }
+
+    public static function getUserHourlyUsage(int $user_id, string $date): array
+    {
+        $hourly_usage = (new HourlyUsage())->where('user_id', $user_id)->where('date', $date)->first();
+
+        return $hourly_usage ? json_decode($hourly_usage->usage, true) : array_fill(0, 24, 0);
+    }
+
+    public static function getUserTodayHourlyUsage(int $user_id): array
+    {
+        $date = date('Y-m-d');
+
+        return self::getUserHourlyUsage($user_id, $date);
     }
 }

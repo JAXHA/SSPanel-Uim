@@ -1,44 +1,55 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Mail;
 
-use App\Services\Config;
-use App\Services\Aws\Factory;
+use App\Models\Config;
+use Aws\Ses\SesClient;
 
-class Ses extends Base
+final class Ses extends Base
 {
-    protected $client;
+    private SesClient $ses;
 
     public function __construct()
     {
-        $this->client = Factory::createSes();
+        $configs = Config::getClass('email');
+
+        $ses = new SesClient([
+            'credentials' => [
+                'key' => $configs['aws_ses_access_key_id'],
+                'secret' => $configs['aws_ses_access_key_secret'],
+            ],
+            'region' => $configs['aws_ses_region'],
+            'version' => 'latest',
+        ]);
+
+        $this->ses = $ses;
     }
 
-    public function getSender()
+    public function send($to, $subject, $body): void
     {
-        return $_ENV['aws_ses_sender'];
-    }
+        $ses = $this->ses;
+        $char_set = 'UTF-8';
 
-    public function send($to, $subject, $text)
-    {
-        $this->client->sendEmail([
-            'Destination' => [ // REQUIRED
+        $ses->sendEmail([
+            'Destination' => [
                 'ToAddresses' => [$to],
             ],
-            'Message' => [ // REQUIRED
-                'Body' => [ // REQUIRED
+            'Source' => Config::obtain('aws_ses_sender'),
+            'Message' => [
+                'Body' => [
                     'Html' => [
-                        'Data' => $text, // REQUIRED
-                    ],
-                    'Text' => [
-                        'Data' => $text, // REQUIRED
+                        'Charset' => $char_set,
+                        'Data' => $body,
                     ],
                 ],
-                'Subject' => [ // REQUIRED
-                    'Data' => $subject, // REQUIRED
+                'Subject' => [
+                    'Charset' => $char_set,
+                    'Data' => $subject,
                 ],
             ],
-            'Source' => $this->getSender(), // REQUIRED
+
         ]);
     }
 }

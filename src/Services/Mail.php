@@ -1,71 +1,67 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
-/***
- * Mail Service
- */
-
-use App\Models\Setting;
+use App\Models\Config;
+use App\Services\Mail\AlibabaCloud;
+use App\Services\Mail\Mailchimp;
 use App\Services\Mail\Mailgun;
+use App\Services\Mail\NullMail;
+use App\Services\Mail\Postal;
+use App\Services\Mail\SendGrid;
 use App\Services\Mail\Ses;
 use App\Services\Mail\Smtp;
-use App\Services\Mail\SendGrid;
-use App\Services\Mail\NullMail;
-use Smarty;
+use Exception;
+use Psr\Http\Client\ClientExceptionInterface;
+use Smarty\Smarty;
 
-class Mail
+/*
+ * Mail Service
+ */
+final class Mail
 {
-    /**
-     * @return Mailgun|NullMail|SendGrid|Ses|Smtp|null
-     */
-    public static function getClient()
+    public static function getClient(): AlibabaCloud|Mailchimp|Mailgun|NullMail|Postal|SendGrid|Ses|Smtp
     {
-        $driver = Setting::obtain('mail_driver');
-        switch ($driver) {
-            case 'mailgun':
-                return new Mailgun();
-            case 'ses':
-                return new Ses();
-            case 'smtp':
-                return new Smtp();
-            case 'sendgrid':
-                return new SendGrid();
-            default:
-                return new NullMail();
-        }
+        return match (Config::obtain('email_driver')) {
+            'alibabacloud' => new AlibabaCloud(),
+            'mailchimp' => new Mailchimp(),
+            'mailgun' => new Mailgun(),
+            'postal' => new Postal(),
+            'sendgrid' => new SendGrid(),
+            'ses' => new Ses(),
+            'smtp' => new Smtp(),
+            default => new NullMail(),
+        };
     }
 
     /**
-     * @param $template
-     * @param $ary
-     * @return mixed
+     * @throws Exception
      */
-    public static function genHtml($template, $ary)
+    public static function genHtml($template, $ary): false|string
     {
-        $smarty = new smarty();
-        $smarty->settemplatedir(BASE_PATH . '/resources/email/');
-        $smarty->setcompiledir(BASE_PATH . '/storage/framework/smarty/compile/');
-        $smarty->setcachedir(BASE_PATH . '/storage/framework/smarty/cache/');
-        // add config
-        $smarty->assign('config', Config::getPublicConfig());
+        $smarty = new Smarty();
+        $smarty->setTemplateDir(BASE_PATH . '/resources/email/');
+        $smarty->setCompileDir(BASE_PATH . '/storage/framework/smarty/compile/');
+        $smarty->setCacheDir(BASE_PATH . '/storage/framework/smarty/cache/');
+        $smarty->assign('config', View::getConfig());
+
         foreach ($ary as $key => $value) {
             $smarty->assign($key, $value);
         }
+
         return $smarty->fetch($template);
     }
 
     /**
-     * @param $to
-     * @param $subject
-     * @param $template
-     * @param $ary
-     * @param $files
-     * @return bool|void
+     * @throws Exception
+     * @throws ClientExceptionInterface
      */
-    public static function send($to, $subject, $template, $ary = [], $files = [])
+    public static function send($to, $subject, $template, $array = []): void
     {
-        $text = self::genHtml($template, $ary);
-        return self::getClient()->send($to, $subject, $text, $files);
+        $body = self::genHtml($template, $array);
+
+        self::getClient()->send($to, $subject, $body);
     }
 }

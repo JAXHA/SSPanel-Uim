@@ -9,29 +9,32 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../config/.config.php';
-require __DIR__ . '/../config/appprofile.php';
-require __DIR__ . '/../app/predefine.php';
-require __DIR__ . '/../app/envload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../config/.config.php';
+require_once __DIR__ . '/../config/appprofile.php';
+require_once __DIR__ . '/../app/predefine.php';
 
-// TODO: legacy boot function
+use App\Middleware\ErrorHandler;
 use App\Services\Boot;
+use GuzzleHttp\Psr7\HttpFactory;
+use GuzzleHttp\Psr7\ServerRequest;
+use Slim\Factory\AppFactory;
+use Slim\Http\Factory\DecoratedResponseFactory;
 
 Boot::setTime();
 Boot::bootSentry();
 Boot::bootDb();
 
-/** @var Slim\Container $container */
-$container = require __DIR__ . '/../app/container.php';
-$app = new Slim\App($container);
+$guzzle_factory = new HttpFactory();
+$response_factory = new DecoratedResponseFactory($guzzle_factory, $guzzle_factory);
+$app = AppFactory::create($response_factory);
 
-/** @var closure $middleware */
-$middleware = require __DIR__ . '/../app/middleware.php';
-$middleware($app);
+$app->add(new ErrorHandler());
 
-/** @var closure $routes */
-$routes = require __DIR__ . '/../app/routes.php';
+$routes = require_once __DIR__ . '/../app/routes.php';
 $routes($app);
 
-$app->run();
+$request = ServerRequest::fromGlobals();
+$request = new Slim\Http\ServerRequest($request);
+
+$app->run($request);

@@ -1,55 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
+use Illuminate\Database\Query\Builder;
+
 /**
- * Ticket Model
+ * @property int    $id       工单ID
+ * @property string $title    工单标题
+ * @property string $content  工单内容
+ * @property int    $userid   用户ID
+ * @property int    $datetime 创建时间
+ * @property string $status   工单状态
+ * @property string $type     工单类型
+ *
+ * @mixin Builder
  */
-class Ticket extends Model
+final class Ticket extends Model
 {
     protected $connection = 'default';
-
     protected $table = 'ticket';
 
     /**
-     * [静态方法] 删除不存在的用户的记录
-     *
-     * @param Ticket $Ticket
+     * 工单类型
      */
-    public static function user_is_null($Ticket): void
+    public function type(): string
     {
-        $tickets = Ticket::where('userid', $Ticket->userid)->where('rootid', 0)->get();
-        foreach ($tickets as $ticket) {
-            self::where('rootid', $ticket->id)->delete();
-            $ticket->delete();
-        }
-    }
-
-    /**
-     * 时间
-     */
-    public function datetime(): string
-    {
-        return date('Y-m-d H:i:s', $this->datetime);
-    }
-
-    /**
-     * 用户
-     */
-    public function user(): ?User
-    {
-        return User::find($this->userid);
-    }
-
-    /**
-     * 用户名
-     */
-    public function user_name(): string
-    {
-        if ($this->user() == null) {
-            return '用户已不存在';
-        }
-        return $this->user()->user_name;
+        return match ($this->type) {
+            'howto' => '使用',
+            'billing' => '财务',
+            'account' => '账户',
+            default => '其他',
+        };
     }
 
     /**
@@ -57,6 +40,11 @@ class Ticket extends Model
      */
     public function status(): string
     {
-        return $this->status == 1 ? '开启' : '关闭';
+        return match ($this->status) {
+            'closed' => '已结单',
+            'open_wait_user' => '等待用户回复',
+            'open_wait_admin' => '进行中',
+            default => '未知',
+        };
     }
 }

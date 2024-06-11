@@ -1,19 +1,11 @@
 ---
 name: Feature request
-about: Suggest an new idea for this project
-title: "[Feature Request]"
-labels: enhancement
+about: Suggest a new idea for this project
+title: "[Feature Request] 在这里填入你所希望添加功能的概述"
+labels: feature-request
 
 ---
 
-- [ ] I certify that I have read project Wiki and other issue may related to this one.
-- [ ] I acknowledge I have to replace [ ] with [x]. If I leave any space before or after x, my issue could be closed without any notice.
+**Feature 功能请求**
 
-**Feature**
-The feature you want.
-
-**Solution**
-If you have some solution about this issue, type it here.
-
-**Addition**
-Additional context here.
+Describe the feature you want. 请描述你想要的功能。

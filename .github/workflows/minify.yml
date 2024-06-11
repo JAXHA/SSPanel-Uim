@@ -1,44 +1,37 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Auto Minify CSS/JS file
 
-# Controls when the action will run. Triggers the workflow on push or pull request
-# events but only for the dev branch
 on:
   push:
-    branches: [ dev ]
     paths:
       - 'public/assets/css/**'
       - 'public/assets/js/**'
-      - 'public/theme/material/css/**'
-      - 'public/theme/material/js/**'
-  pull_request:
-    branches: [ dev ]
+      - 'public/theme/**'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Auto Minify Theme CSS file
-        uses: nizarmah/auto-minify@master
+      - uses: actions/checkout@v4
         with:
-          directory: 'public/theme/material/css'
-      - name: Auto Minify Theme JS file
-        uses: nizarmah/auto-minify@master
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Auto minify tabler theme CSS file
+        uses: nizarmah/auto-minify@v3
         with:
-          directory: 'public/theme/material/js'
-      - name: Auto Minify CSS file
-        uses: nizarmah/auto-minify@master
+          directory: 'public/theme/tabler/css'
+      - name: Auto minify tabler theme JS file
+        uses: nizarmah/auto-minify@v3
+        with:
+          directory: 'public/theme/tabler/js'
+      - name: Auto minify asset CSS file
+        uses: nizarmah/auto-minify@v3
         with:
           directory: 'public/assets/css'
-      - name: Auto Minify JS file
-        uses: nizarmah/auto-minify@master
+      - name: Auto minify asset JS file
+        uses: nizarmah/auto-minify@v3
         with:
           directory: 'public/assets/js'
       - name: Auto committing minified files
-        uses: stefanzweifel/git-auto-commit-action@v3.0.0
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           repository: 'public'
-          commit_message: "Github Action: Auto Minified Theme CSS/JS Files"
-          branch: ${{ github.ref }}
+          commit_message: "chore: auto minified theme CSS/JS files"

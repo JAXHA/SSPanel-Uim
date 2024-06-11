@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Command;
 
 /**
@@ -9,12 +11,12 @@ namespace App\Command;
  */
 abstract class Command
 {
-    public $argv;
+    public array|null $argv;
 
     public function __construct($argv)
     {
         $this->argv = $argv;
     }
 
-    abstract public function boot();
+    abstract public function boot(): void;
 }

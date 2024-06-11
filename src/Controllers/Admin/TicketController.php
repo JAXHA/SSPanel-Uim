@@ -1,232 +1,260 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controllers\Admin;
 
-use App\Controllers\AdminController;
-use App\Models\{
-    User,
-    Ticket
-};
+use App\Controllers\BaseController;
+use App\Models\Ticket;
+use App\Models\User;
+use App\Services\LLM;
+use App\Services\Notification;
 use App\Utils\Tools;
-use voku\helper\AntiXSS;
-use Slim\Http\{
-    Request,
-    Response
-};
+use Exception;
+use GuzzleHttp\Exception\GuzzleException;
+use Psr\Http\Client\ClientExceptionInterface;
+use Psr\Http\Message\ResponseInterface;
+use Slim\Http\Response;
+use Slim\Http\ServerRequest;
+use Telegram\Bot\Exceptions\TelegramSDKException;
+use function array_merge;
+use function count;
+use function json_decode;
+use function json_encode;
+use function time;
 
-class TicketController extends AdminController
+final class TicketController extends BaseController
 {
+    private static array $details =
+        [
+            'field' => [
+                'op' => '操作',
+                'id' => '工单ID',
+                'title' => '主题',
+                'status' => '工单状态',
+                'type' => '工单类型',
+                'userid' => '提交用户',
+                'datetime' => '创建时间',
+            ],
+        ];
+
+    private static string $err_msg = '请求失败';
+
     /**
      * 后台工单页面
      *
-     * @param Request   $request
-     * @param Response  $response
-     * @param array     $args
+     * @throws Exception
      */
-    public function index($request, $response, $args)
+    public function index(ServerRequest $request, Response $response, array $args): ResponseInterface
     {
-        $table_config['total_column'] = array(
-            'op'        => '操作',
-            'id'        => 'ID',
-            'datetime'  => '时间',
-            'title'     => '标题',
-            'userid'    => '用户ID',
-            'user_name' => '用户名',
-            'status'    => '状态'
-        );
-        $table_config['default_show_column'] = array(
-            'op', 'id',
-            'datetime', 'title', 'userid', 'user_name', 'status'
-        );
-        $table_config['ajax_url'] = 'ticket/ajax';
         return $response->write(
             $this->view()
-                ->assign('table_config', $table_config)
-                ->display('admin/ticket/index.tpl')
+                ->assign('details', self::$details)
+                ->fetch('admin/ticket/index.tpl')
         );
     }
 
     /**
-     * 後臺創建新工單
-     *
-     * @param Request   $request
-     * @param Response  $response
-     * @param array     $args
+     * @throws TelegramSDKException
+     * @throws GuzzleException
+     * @throws ClientExceptionInterface
      */
-    public function add($request, $response, $args)
+    public function update(ServerRequest $request, Response $response, array $args): ResponseInterface
     {
-        $title    = $request->getParam('title');
-        $content  = $request->getParam('content');
-        $markdown = $request->getParam('markdown');
-        $userid   = $request->getParam('userid');
-        if ($title == '' || $content == '') {
+        $id = $args['id'];
+        $comment = $request->getParam('comment') ?? '';
+
+        if ($comment === '') {
             return $response->withJson([
                 'ret' => 0,
-                'msg' => '非法输入'
-            ]);
-        }
-        if (strpos($content, 'admin') !== false || strpos($content, 'user') !== false) {
-            return $response->withJson([
-                'ret' => 0,
-                'msg' => '请求中有不当词语'
+                'msg' => self::$err_msg,
             ]);
         }
 
-        $ticket           = new Ticket();
-        $antiXss          = new AntiXSS();
-        $ticket->title    = $antiXss->xss_clean($title);
-        $ticket->content  = $antiXss->xss_clean($content);
-        $ticket->rootid   = 0;
-        $ticket->userid   = $userid;
-        $ticket->datetime = time();
-        $ticket->save();
+        $ticket = (new Ticket())->where('id', $id)->first();
 
-        $user = User::find($userid);
-        $user->sendMail(
-            $_ENV['appName'] . '-新管理员工单被开启',
-            'news/warn.tpl',
+        if ($ticket === null) {
+            return $response->withJson([
+                'ret' => 0,
+                'msg' => self::$err_msg,
+            ]);
+        }
+
+        $content_old = json_decode($ticket->content, true);
+        $content_new = [
             [
-                'text' => '管理员开启了新的工单，请您及时访问用户面板处理。'
+                'comment_id' => $content_old[count($content_old) - 1]['comment_id'] + 1,
+                'commenter_name' => 'Admin',
+                'comment' => $comment,
+                'datetime' => time(),
             ],
-            []
-        );
+        ];
 
-        return $response->withJson([
-            'ret' => 1,
-            'msg' => '提交成功'
-        ]);
-    }
+        $user = (new User())->find($ticket->userid);
 
-    /**
-     * 后台 更新工单内容
-     *
-     * @param Request   $request
-     * @param Response  $response
-     * @param array     $args
-     */
-    public function update($request, $response, $args)
-    {
-        $id      = $args['id'];
-        $content = $request->getParam('content');
-        $status  = $request->getParam('status');
-        if ($content == '' || $status == '') {
-            return $response->withJson([
-                'ret' => 0,
-                'msg' => '请填全'
-            ]);
-        }
-        if (strpos($content, 'admin') !== false || strpos($content, 'user') !== false) {
-            return $response->withJson([
-                'ret' => 0,
-                'msg' => '请求中有不正当的词语。'
-            ]);
-        }
-        $main = Ticket::find($id);
-        $user = User::find($main->userid);
-        $user->sendMail(
+        Notification::notifyUser(
+            $user,
             $_ENV['appName'] . '-工单被回复',
-            'news/warn.tpl',
-            [
-                'text' => '您好，有人回复了<a href="' . $_ENV['baseUrl'] . '/user/ticket/' . $main->id . '/view">工单</a>，请您查看。'
-            ],
-            []
+            '你好，有人回复了<a href="' . $_ENV['baseUrl'] . '/user/ticket/' . $ticket->id . '/view">工单</a>，请你查看。'
         );
 
-        $antiXss                = new AntiXSS();
-        $ticket                 = new Ticket();
-        $ticket->title          = $antiXss->xss_clean($main->title);
-        $ticket->content        = $antiXss->xss_clean($content);
-        $ticket->rootid         = $main->id;
-        $ticket->userid         = $this->user->id;
-        $ticket->datetime       = time();
+        $ticket->content = json_encode(array_merge($content_old, $content_new));
+        $ticket->status = 'open_wait_user';
         $ticket->save();
-        $main->status           = $status;
-        $main->save();
 
         return $response->withJson([
             'ret' => 1,
-            'msg' => '提交成功'
+            'msg' => '提交成功',
         ]);
     }
 
     /**
-     * 后台 查看指定工单
-     *
-     * @param Request   $request
-     * @param Response  $response
-     * @param array     $args
+     * @throws GuzzleException
+     * @throws TelegramSDKException
+     * @throws ClientExceptionInterface
      */
-    public function show($request, $response, $args)
+    public function updateAI(ServerRequest $request, Response $response, array $args): ResponseInterface
     {
-        $id            = $args['id'];
-        $ticket = Ticket::where('id','=', $id)->first();
-        if($ticket == null) {
-            return $response->withStatus(302)->withHeader('Location', '/user/ticket');
+        $id = $args['id'];
+
+        $ticket = (new Ticket())->where('id', $id)->first();
+
+        if ($ticket === null) {
+            return $response->withJson([
+                'ret' => 0,
+                'msg' => self::$err_msg,
+            ]);
         }
 
-        $pageNum       = $request->getQueryParams()['page'] ?? 1;
-        $ticketset     = Ticket::where('id', $id)->orWhere('rootid', '=', $id)->orderBy('datetime', 'desc')->paginate(5, ['*'], 'page', $pageNum);
-        $ticketset->setPath('/admin/ticket/' . $id . '/view');
+        $content_old = json_decode($ticket->content, true);
+        // 获取用户的第一个问题，作为 LLM 的输入
+        $ai_reply = LLM::genTextResponse($content_old[0]['comment']);
+        $content_new = [
+            [
+                'comment_id' => $content_old[count($content_old) - 1]['comment_id'] + 1,
+                'commenter_name' => 'AI Admin',
+                'comment' => $ai_reply,
+                'datetime' => time(),
+            ],
+        ];
 
-        $render = Tools::paginate_render($ticketset);
+        $user = (new User())->find($ticket->userid);
+
+        Notification::notifyUser(
+            $user,
+            $_ENV['appName'] . '-工单被回复',
+            '你好，AI 回复了<a href="' . $_ENV['baseUrl'] . '/user/ticket/' . $ticket->id . '/view">工单</a>，请你查看。'
+        );
+
+        $ticket->content = json_encode(array_merge($content_old, $content_new));
+        $ticket->status = 'open_wait_user';
+        $ticket->save();
+
+        return $response->withJson([
+            'ret' => 1,
+            'msg' => '提交成功',
+        ]);
+    }
+
+    /**
+     * 后台查看指定工单
+     *
+     * @throws Exception
+     */
+    public function detail(ServerRequest $request, Response $response, array $args): ResponseInterface
+    {
+        $id = $args['id'];
+        $ticket = (new Ticket())->where('id', '=', $id)->first();
+
+        if ($ticket === null) {
+            return $response->withRedirect('/admin/ticket');
+        }
+
+        $comments = json_decode($ticket->content);
+
+        foreach ($comments as $comment) {
+            $comment->datetime = Tools::toDateTime((int) $comment->datetime);
+        }
+
         return $response->write(
             $this->view()
-                ->assign('ticketset', $ticketset)
-                ->assign('id', $id)
-                ->assign('render', $render)
-                ->display('admin/ticket/view.tpl')
+                ->assign('ticket', $ticket)
+                ->assign('comments', $comments)
+                ->fetch('admin/ticket/view.tpl')
         );
     }
 
     /**
-     * 后台工单页面 AJAX
-     *
-     * @param Request   $request
-     * @param Response  $response
-     * @param array     $args
+     * 后台关闭工单
      */
-    public function ajax($request, $response, $args)
+    public function close(ServerRequest $request, Response $response, array $args): ResponseInterface
     {
-        $query = Ticket::getTableDataFromAdmin(
-            $request,
-            static function (&$order_field) {
-                if (in_array($order_field, ['op'])) {
-                    $order_field = 'id';
-                }
-                if (in_array($order_field, ['user_name'])) {
-                    $order_field = 'userid';
-                }
-            },
-            static function ($query) {
-                $query->where('rootid', 0);
+        $id = $args['id'];
+        $ticket = (new Ticket())->where('id', '=', $id)->first();
+
+        if ($ticket === null) {
+            return $response->withJson([
+                'ret' => 0,
+                'msg' => self::$err_msg,
+            ]);
+        }
+
+        if ($ticket->status === 'closed') {
+            return $response->withJson([
+                'ret' => 0,
+                'msg' => self::$err_msg,
+            ]);
+        }
+
+        $ticket->status = 'closed';
+        $ticket->save();
+
+        return $response->withJson([
+            'ret' => 1,
+            'msg' => '关闭成功',
+        ]);
+    }
+
+    /**
+     * 后台删除工单
+     */
+    public function delete(ServerRequest $request, Response $response, array $args): ResponseInterface
+    {
+        $id = $args['id'];
+        (new Ticket())->where('id', '=', $id)->delete();
+
+        return $response->withJson([
+            'ret' => 1,
+            'msg' => '删除成功',
+        ]);
+    }
+
+    /**
+     * 后台工单页面 Ajax
+     */
+    public function ajax(ServerRequest $request, Response $response, array $args): ResponseInterface
+    {
+        $tickets = (new Ticket())->orderBy('id', 'desc')->get();
+
+        foreach ($tickets as $ticket) {
+            $ticket->op = '<button class="btn btn-red" id="delete-ticket" 
+            onclick="deleteTicket(' . $ticket->id . ')">删除</button>';
+
+            if ($ticket->status !== 'closed') {
+                $ticket->op .= '
+                <button class="btn btn-orange" id="close-ticket" 
+                onclick="closeTicket(' . $ticket->id . ')">关闭</button>';
             }
-        );
 
-        $data  = [];
-        foreach ($query['datas'] as $value) {
-            /** @var Ticket $value */
-
-            if ($value->user() == null) {
-                Ticket::user_is_null($value);
-                continue;
-            }
-            $tempdata               = [];
-            $tempdata['op']         = '<a class="btn btn-brand" href="/admin/ticket/' . $value->id . '/view">查看</a>';
-            $tempdata['id']         = $value->id;
-            $tempdata['datetime']   = $value->datetime();
-            $tempdata['title']      = $value->title;
-            $tempdata['userid']     = $value->userid;
-            $tempdata['user_name']  = $value->user_name();
-            $tempdata['status']     = $value->status();
-
-            $data[] = $tempdata;
+            $ticket->op .= '
+            <a class="btn btn-primary" href="/admin/ticket/' . $ticket->id . '/view">查看</a>';
+            $ticket->status = $ticket->status();
+            $ticket->type = $ticket->type();
+            $ticket->datetime = Tools::toDateTime((int) $ticket->datetime);
         }
 
         return $response->withJson([
-            'draw'            => $request->getParam('draw'),
-            'recordsTotal'    => Ticket::count(),
-            'recordsFiltered' => $query['count'],
-            'data'            => $data,
+            'tickets' => $tickets,
         ]);
     }
 }

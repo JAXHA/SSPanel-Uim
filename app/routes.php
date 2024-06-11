@@ -2,335 +2,337 @@
 
 declare(strict_types=1);
 
-use Slim\App as SlimApp;
-use App\Middleware\{Auth, Guest, Admin, Mod_Mu, AuthorizationBearer};
+use App\Middleware\Admin;
+use App\Middleware\Guest;
+use App\Middleware\NodeToken;
+use App\Middleware\User;
+use Slim\Routing\RouteCollectorProxy;
 
-return function (SlimApp $app) {
+return static function (Slim\App $app): void {
     // Home
-    $app->get('/',          App\Controllers\HomeController::class . ':index');
-    $app->get('/404',       App\Controllers\HomeController::class . ':page404');
-    $app->get('/405',       App\Controllers\HomeController::class . ':page405');
-    $app->get('/500',       App\Controllers\HomeController::class . ':page500');
-    $app->get('/tos',       App\Controllers\HomeController::class . ':tos');
-    $app->get('/staff',     App\Controllers\HomeController::class . ':staff');
+    $app->get('/', App\Controllers\HomeController::class . ':index');
+    $app->get('/tos', App\Controllers\HomeController::class . ':tos');
+    $app->get('/staff', App\Controllers\HomeController::class . ':staff');
+    // Error Page
+    $app->get('/404', App\Controllers\HomeController::class . ':notFound');
+    $app->get('/405', App\Controllers\HomeController::class . ':methodNotAllowed');
+    $app->get('/500', App\Controllers\HomeController::class . ':internalServerError');
+    // Bot Callback
+    $app->post('/callback/{type}', App\Controllers\CallbackController::class . ':index');
+    // OAuth
+    $app->post('/oauth/{type}', App\Controllers\OAuthController::class . ':index');
+    $app->get('/oauth/{type}', App\Controllers\OAuthController::class . ':index');
+    // 通用订阅
+    $app->get('/sub/{token}/{subtype}', App\Controllers\SubController::class . ':index');
+    // User
+    $app->group('/user', static function (RouteCollectorProxy $group): void {
+        $group->get('', App\Controllers\UserController::class . ':index');
+        $group->get('/', App\Controllers\UserController::class . ':index');
+        // 签到
+        $group->post('/checkin', App\Controllers\UserController::class . ':checkin');
+        // 公告
+        $group->get('/announcement', App\Controllers\UserController::class . ':announcement');
+        // 文档
+        $group->get('/docs', App\Controllers\User\DocsController::class . ':index');
+        $group->get('/docs/{id:[0-9]+}/view', App\Controllers\User\DocsController::class . ':detail');
+        // 个人资料
+        $group->get('/profile', App\Controllers\User\ProfileController::class . ':index');
+        // Invite
+        $group->get('/invite', App\Controllers\User\InviteController::class . ':index');
+        $group->post('/invite/reset', App\Controllers\User\InviteController::class . ':reset');
+        // 封禁
+        $group->get('/banned', App\Controllers\UserController::class . ':banned');
+        // 节点
+        $group->get('/server', App\Controllers\User\ServerController::class . ':index');
+        // 动态倍率
+        $group->get('/rate', App\Controllers\User\RateController::class . ':index');
+        $group->post('/rate', App\Controllers\User\RateController::class . ':ajax');
+        // 审计
+        $group->get('/detect', App\Controllers\User\DetectRuleController::class . ':index');
+        $group->get('/detect/log', App\Controllers\User\DetectLogController::class . ':index');
+        // 工单
+        $group->get('/ticket', App\Controllers\User\TicketController::class . ':index');
+        $group->get('/ticket/create', App\Controllers\User\TicketController::class . ':create');
+        $group->post('/ticket', App\Controllers\User\TicketController::class . ':add');
+        $group->get('/ticket/{id:[0-9]+}/view', App\Controllers\User\TicketController::class . ':detail');
+        $group->put('/ticket/{id:[0-9]+}', App\Controllers\User\TicketController::class . ':update');
+        // 资料编辑
+        $group->get('/edit', App\Controllers\User\InfoController::class . ':index');
+        $group->post('/edit/email', App\Controllers\User\InfoController::class . ':updateEmail');
+        $group->post('/edit/username', App\Controllers\User\InfoController::class . ':updateUsername');
+        $group->post('/edit/unbind_im', App\Controllers\User\InfoController::class . ':unbindIm');
+        $group->post('/edit/password', App\Controllers\User\InfoController::class . ':updatePassword');
+        $group->post('/edit/passwd_reset', App\Controllers\User\InfoController::class . ':resetPasswd');
+        $group->post('/edit/apitoken_reset', App\Controllers\User\InfoController::class . ':resetApiToken');
+        $group->post('/edit/method', App\Controllers\User\InfoController::class . ':updateMethod');
+        $group->post('/edit/url_reset', App\Controllers\User\InfoController::class . ':resetUrl');
+        $group->post('/edit/daily_mail', App\Controllers\User\InfoController::class . ':updateDailyMail');
+        $group->post('/edit/contact_method', App\Controllers\User\InfoController::class . ':updateContactMethod');
+        $group->post('/edit/theme', App\Controllers\User\InfoController::class . ':updateTheme');
+        $group->post('/edit/theme_mode', App\Controllers\User\InfoController::class . ':updateThemeMode');
+        $group->post('/edit/kill', App\Controllers\User\InfoController::class . ':sendToGulag');
+        // 发送验证邮件
+        $group->post('/edit/send', App\Controllers\AuthController::class . ':sendVerify');
+        // MFA
+        $group->post('/ga_check', App\Controllers\User\MFAController::class . ':checkGa');
+        $group->post('/ga_set', App\Controllers\User\MFAController::class . ':setGa');
+        $group->post('/ga_reset', App\Controllers\User\MFAController::class . ':resetGa');
+        // 账户余额
+        $group->get('/money', App\Controllers\User\MoneyController::class . ':index');
+        $group->post('/giftcard', App\Controllers\User\MoneyController::class . ':applyGiftCard');
+        // 产品页面
+        $group->get('/product', App\Controllers\User\ProductController::class . ':index');
+        // 订单页面
+        $group->get('/order', App\Controllers\User\OrderController::class . ':index');
+        $group->get('/order/create', App\Controllers\User\OrderController::class . ':create');
+        $group->post('/order/create', App\Controllers\User\OrderController::class . ':process');
+        $group->get('/order/{id:[0-9]+}/view', App\Controllers\User\OrderController::class . ':detail');
+        $group->post('/order/ajax', App\Controllers\User\OrderController::class . ':ajax');
+        // 账单页面
+        $group->get('/invoice', App\Controllers\User\InvoiceController::class . ':index');
+        $group->get('/invoice/{id:[0-9]+}/view', App\Controllers\User\InvoiceController::class . ':detail');
+        $group->post('/invoice/pay_balance', App\Controllers\User\InvoiceController::class . ':payBalance');
+        $group->post('/invoice/ajax', App\Controllers\User\InvoiceController::class . ':ajax');
+        // 新优惠码系统
+        $group->post('/coupon', App\Controllers\User\CouponController::class . ':check');
+        // 支付
+        $group->post('/payment/purchase/{type}', App\Services\Payment::class . ':purchase');
+        $group->get('/payment/purchase/{type}', App\Services\Payment::class . ':purchase');
+        $group->get('/payment/return/{type}', App\Services\Payment::class . ':returnHTML');
+        // Get Clients
+        $group->get('/clients/{name}', App\Controllers\User\ClientController::class . ':getClients');
+        // 登出
+        $group->get('/logout', App\Controllers\UserController::class . ':logout');
+    })->add(new User());
 
-    // other
-    $app->post('/notify',               App\Controllers\HomeController::class . ':notify');
-
-    // Telegram
-    $app->post('/telegram_callback',    App\Controllers\HomeController::class . ':telegram');
-
-    // User Center
-    $app->group('/user', function () {
-        $this->get('',                          App\Controllers\UserController::class . ':index');
-        $this->get('/',                         App\Controllers\UserController::class . ':index');
-
-        $this->post('/checkin',                 App\Controllers\UserController::class . ':doCheckin');
-
-        $this->get('/announcement',             App\Controllers\UserController::class . ':announcement');
-        $this->get('/media',                    App\Controllers\UserController::class . ':media');
-
-        $this->get('/donate',                   App\Controllers\UserController::class . ':donate');
-        $this->get('/profile',                  App\Controllers\UserController::class . ':profile');
-        $this->get('/invite',                   App\Controllers\UserController::class . ':invite');
-        $this->get('/disable',                  App\Controllers\UserController::class . ':disable');
-
-        $this->get('/node',                     App\Controllers\User\NodeController::class . ':user_node_page');
-        $this->get('/node/{id}/ajax',           App\Controllers\User\NodeController::class . ':user_node_ajax');
-        $this->get('/node/{id}',                App\Controllers\User\NodeController::class . ':user_node_info');
-
-        $this->get('/detect',                   App\Controllers\UserController::class . ':detect_index');
-        $this->get('/detect/log',               App\Controllers\UserController::class . ':detect_log');
-
-        $this->get('/shop',                     App\Controllers\UserController::class . ':shop');
-        $this->post('/coupon_check',            App\Controllers\UserController::class . ':CouponCheck');
-        $this->post('/buy',                     App\Controllers\UserController::class . ':buy');
-        $this->post('/buy_traffic_package',     App\Controllers\UserController::class . ':buy_traffic_package');
-
-        $this->get('/ticket',                   App\Controllers\User\TicketController::class . ':ticket');
-        $this->get('/ticket/create',            App\Controllers\User\TicketController::class . ':ticket_create');
-        $this->post('/ticket',                  App\Controllers\User\TicketController::class . ':ticket_add');
-        $this->get('/ticket/{id}/view',         App\Controllers\User\TicketController::class . ':ticket_view');
-        $this->put('/ticket/{id}',              App\Controllers\User\TicketController::class . ':ticket_update');
-
-        $this->post('/buy_invite',              App\Controllers\UserController::class . ':buyInvite');
-        $this->post('/custom_invite',           App\Controllers\UserController::class . ':customInvite');
-        $this->get('/edit',                     App\Controllers\UserController::class . ':edit');
-        $this->post('/email',                   App\Controllers\UserController::class . ':updateEmail');
-        $this->post('/username',                App\Controllers\UserController::class . ':updateUsername');
-        $this->post('/password',                App\Controllers\UserController::class . ':updatePassword');
-        $this->post('/send',                    App\Controllers\AuthController::class . ':sendVerify');
-        $this->post('/wechat',                  App\Controllers\UserController::class . ':updateWechat');
-        $this->post('/ssr',                     App\Controllers\UserController::class . ':updateSSR');
-        $this->post('/theme',                   App\Controllers\UserController::class . ':updateTheme');
-        $this->post('/mail',                    App\Controllers\UserController::class . ':updateMail');
-        $this->post('/sspwd',                   App\Controllers\UserController::class . ':updateSsPwd');
-        $this->post('/method',                  App\Controllers\UserController::class . ':updateMethod');
-        $this->post('/hide',                    App\Controllers\UserController::class . ':updateHide');
-        $this->get('/sys',                      App\Controllers\UserController::class . ':sys');
-        $this->get('/trafficlog',               App\Controllers\UserController::class . ':trafficLog');
-        $this->get('/kill',                     App\Controllers\UserController::class . ':kill');
-        $this->post('/kill',                    App\Controllers\UserController::class . ':handleKill');
-        $this->get('/logout',                   App\Controllers\UserController::class . ':logout');
-        $this->get('/backtoadmin',              App\Controllers\UserController::class . ':backtoadmin');
-        $this->get('/code',                     App\Controllers\UserController::class . ':code');
-
-        $this->get('/code_check',               App\Controllers\UserController::class . ':code_check');
-        $this->post('/code',                    App\Controllers\UserController::class . ':codepost');
-        $this->post('/gacheck',                 App\Controllers\UserController::class . ':GaCheck');
-        $this->post('/gaset',                   App\Controllers\UserController::class . ':GaSet');
-        $this->get('/gareset',                  App\Controllers\UserController::class . ':GaReset');
-        $this->get('/telegram_reset',           App\Controllers\UserController::class . ':telegram_reset');
-        $this->post('/resetport',               App\Controllers\UserController::class . ':ResetPort');
-        $this->post('/specifyport',             App\Controllers\UserController::class . ':SpecifyPort');
-        $this->post('/unblock',                 App\Controllers\UserController::class . ':Unblock');
-        $this->get('/bought',                   App\Controllers\UserController::class . ':bought');
-        $this->delete('/bought',                App\Controllers\UserController::class . ':deleteBoughtGet');
-        $this->get('/url_reset',                App\Controllers\UserController::class . ':resetURL');
-        $this->put('/invite',                   App\Controllers\UserController::class . ':resetInviteURL');
-
-        $this->get('/order',                    App\Controllers\UserController::class . ':user_order');
-        $this->get('/product',                  App\Controllers\UserController::class . ':product_index');
-
-        // 订阅记录
-        $this->get('/subscribe_log',            App\Controllers\UserController::class . ':subscribe_log');
-
-        // getUserAllURL
-        $this->get('/getUserAllURL',            App\Controllers\UserController::class . ':getUserAllURL');
-
-        // getPcClient
-        $this->get('/getPcClient',              App\Controllers\UserController::class . ':getPcClient');
-
-        //Reconstructed Payment System
-        $this->post('/payment/purchase/{type}',        App\Services\Payment::class . ':purchase');
-        $this->get('/payment/purchase/{type}',         App\Services\Payment::class . ':purchase');
-        $this->get('/payment/return/{type}',           App\Services\Payment::class . ':returnHTML');
-
-    })->add(new Auth());
-
-    $app->group('/payment', function () {
-        $this->get('/notify/{type}',           App\Services\Payment::class . ':notify');
-        $this->post('/notify/{type}',   App\Services\Payment::class . ':notify');
-        $this->post('/status/{type}',          App\Services\Payment::class . ':getStatus');
-        // $this->post('/coinpay/notify',  App\Services\CoinPayment::class. ':notify');
+    $app->group('/payment', static function (RouteCollectorProxy $group): void {
+        $group->get('/notify/{type}', App\Services\Payment::class . ':notify');
+        $group->post('/notify/{type}', App\Services\Payment::class . ':notify');
+        $group->post('/status/{type}', App\Services\Payment::class . ':getStatus');
     });
-
     // Auth
-    $app->group('/auth', function () {
-        $this->get('/login',            App\Controllers\AuthController::class . ':login');
-        $this->post('/qrcode_check',    App\Controllers\AuthController::class . ':qrcode_check');
-        $this->post('/login',           App\Controllers\AuthController::class . ':loginHandle');
-        $this->post('/qrcode_login',    App\Controllers\AuthController::class . ':qrcode_loginHandle');
-        $this->get('/register',         App\Controllers\AuthController::class . ':register');
-        $this->post('/register',        App\Controllers\AuthController::class . ':registerHandle');
-        $this->post('/send',            App\Controllers\AuthController::class . ':sendVerify');
-        $this->get('/logout',           App\Controllers\AuthController::class . ':logout');
-        $this->get('/telegram_oauth',   App\Controllers\AuthController::class . ':telegram_oauth');
-        $this->get('/login_getCaptcha', App\Controllers\AuthController::class . ':getCaptcha');
+    $app->group('/auth', static function (RouteCollectorProxy $group): void {
+        $group->get('/login', App\Controllers\AuthController::class . ':login');
+        $group->post('/login', App\Controllers\AuthController::class . ':loginHandle');
+        $group->get('/register', App\Controllers\AuthController::class . ':register');
+        $group->post('/register', App\Controllers\AuthController::class . ':registerHandle');
+        $group->post('/send', App\Controllers\AuthController::class . ':sendVerify');
+        $group->get('/logout', App\Controllers\AuthController::class . ':logout');
     })->add(new Guest());
-
     // Password
-    $app->group('/password', function () {
-        $this->get('/reset',            App\Controllers\PasswordController::class . ':reset');
-        $this->post('/reset',           App\Controllers\PasswordController::class . ':handleReset');
-        $this->get('/token/{token}',    App\Controllers\PasswordController::class . ':token');
-        $this->post('/token/{token}',   App\Controllers\PasswordController::class . ':handleToken');
+    $app->group('/password', static function (RouteCollectorProxy $group): void {
+        $group->get('/reset', App\Controllers\PasswordController::class . ':reset');
+        $group->post('/reset', App\Controllers\PasswordController::class . ':handleReset');
+        $group->get('/token/{token}', App\Controllers\PasswordController::class . ':token');
+        $group->post('/token', App\Controllers\PasswordController::class . ':handleToken');
     })->add(new Guest());
-
     // Admin
-    $app->group('/admin', function () {
-        $this->get('',                          App\Controllers\AdminController::class . ':index');
-        $this->get('/',                         App\Controllers\AdminController::class . ':index');
-
-        $this->get('/sys',                      App\Controllers\AdminController::class . ':sys');
-        $this->get('/invite',                   App\Controllers\AdminController::class . ':invite');
-        $this->post('/invite',                  App\Controllers\AdminController::class . ':addInvite');
-        $this->post('/chginvite',               App\Controllers\AdminController::class . ':chgInvite');
-        $this->post('/payback/ajax',            App\Controllers\AdminController::class . ':ajax_payback');
-
-        // Node Mange
-        $this->get('/node',                     App\Controllers\Admin\NodeController::class . ':index');
-        $this->get('/node/create',              App\Controllers\Admin\NodeController::class . ':create');
-        $this->post('/node',                    App\Controllers\Admin\NodeController::class . ':add');
-        $this->get('/node/{id}/edit',           App\Controllers\Admin\NodeController::class . ':edit');
-        $this->put('/node/{id}',                App\Controllers\Admin\NodeController::class . ':update');
-        $this->delete('/node',                  App\Controllers\Admin\NodeController::class . ':delete');
-        $this->post('/node/ajax',               App\Controllers\Admin\NodeController::class . ':ajax');
-
-        // Ticket Mange
-        $this->get('/ticket',                   App\Controllers\Admin\TicketController::class . ':index');
-        $this->post('/ticket',                  App\Controllers\Admin\TicketController::class . ':add');
-        $this->get('/ticket/{id}/view',         App\Controllers\Admin\TicketController::class . ':show');
-        $this->put('/ticket/{id}',              App\Controllers\Admin\TicketController::class . ':update');
-        $this->post('/ticket/ajax',             App\Controllers\Admin\TicketController::class . ':ajax');
-
-        // Shop Mange
-        $this->get('/shop',                     App\Controllers\Admin\ShopController::class . ':index');
-        $this->post('/shop/ajax',               App\Controllers\Admin\ShopController::class . ':ajax_shop');
-        $this->get('/shop/create',              App\Controllers\Admin\ShopController::class . ':create');
-        $this->post('/shop',                    App\Controllers\Admin\ShopController::class . ':add');
-        $this->get('/shop/{id}/edit',           App\Controllers\Admin\ShopController::class . ':edit');
-        $this->put('/shop/{id}',                App\Controllers\Admin\ShopController::class . ':update');
-        $this->delete('/shop',                  App\Controllers\Admin\ShopController::class . ':deleteGet');
-
-        // Bought Mange
-        $this->get('/bought',                   App\Controllers\Admin\ShopController::class . ':bought');
-        $this->delete('/bought',                App\Controllers\Admin\ShopController::class . ':deleteBoughtGet');
-        $this->post('/bought/ajax',             App\Controllers\Admin\ShopController::class . ':ajax_bought');
-
-        // Product
-        $this->get('/product',                  App\Controllers\Admin\ProductController::class . ':index');
-        $this->get('/product/create',           App\Controllers\Admin\ProductController::class . ':create');
-        $this->post('/product',                 App\Controllers\Admin\ProductController::class . ':save');
-        $this->get('/product/{id}/edit',        App\Controllers\Admin\ProductController::class . ':edit');
-        $this->put('/product/{id}',             App\Controllers\Admin\ProductController::class . ':update');
-        $this->delete('/product/{id}',          App\Controllers\Admin\ProductController::class . ':delete');
-
-        // Ann Mange
-        $this->get('/announcement',             App\Controllers\Admin\AnnController::class . ':index');
-        $this->get('/announcement/create',      App\Controllers\Admin\AnnController::class . ':create');
-        $this->post('/announcement',            App\Controllers\Admin\AnnController::class . ':add');
-        $this->get('/announcement/{id}/edit',   App\Controllers\Admin\AnnController::class . ':edit');
-        $this->put('/announcement/{id}',        App\Controllers\Admin\AnnController::class . ':update');
-        $this->delete('/announcement',          App\Controllers\Admin\AnnController::class . ':delete');
-        $this->post('/announcement/ajax',       App\Controllers\Admin\AnnController::class . ':ajax');
-
-        // Detect Mange
-        $this->get('/detect',                   App\Controllers\Admin\DetectController::class . ':index');
-        $this->get('/detect/create',            App\Controllers\Admin\DetectController::class . ':create');
-        $this->post('/detect',                  App\Controllers\Admin\DetectController::class . ':add');
-        $this->get('/detect/{id}/edit',         App\Controllers\Admin\DetectController::class . ':edit');
-        $this->put('/detect/{id}',              App\Controllers\Admin\DetectController::class . ':update');
-        $this->delete('/detect',                App\Controllers\Admin\DetectController::class . ':delete');
-        $this->get('/detect/log',               App\Controllers\Admin\DetectController::class . ':log');
-        $this->post('/detect/ajax',             App\Controllers\Admin\DetectController::class . ':ajax_rule');
-        $this->post('/detect/log/ajax',         App\Controllers\Admin\DetectController::class . ':ajax_log');
-
-        // IP Mange
-        $this->get('/block',                    App\Controllers\Admin\IpController::class . ':block');
-        $this->get('/unblock',                  App\Controllers\Admin\IpController::class . ':unblock');
-        $this->post('/unblock',                 App\Controllers\Admin\IpController::class . ':doUnblock');
-        $this->get('/login',                    App\Controllers\Admin\IpController::class . ':index');
-        $this->get('/alive',                    App\Controllers\Admin\IpController::class . ':alive');
-        $this->post('/block/ajax',              App\Controllers\Admin\IpController::class . ':ajax_block');
-        $this->post('/unblock/ajax',            App\Controllers\Admin\IpController::class . ':ajax_unblock');
-        $this->post('/login/ajax',              App\Controllers\Admin\IpController::class . ':ajax_login');
-        $this->post('/alive/ajax',              App\Controllers\Admin\IpController::class . ':ajax_alive');
-
-        // Code Mange
-        $this->get('/code',                     App\Controllers\Admin\CodeController::class . ':index');
-        $this->get('/code/create',              App\Controllers\Admin\CodeController::class . ':create');
-        $this->post('/code',                    App\Controllers\Admin\CodeController::class . ':add');
-        $this->get('/donate/create',            App\Controllers\Admin\CodeController::class . ':donate_create');
-        $this->post('/donate',                  App\Controllers\Admin\CodeController::class . ':donate_add');
-        $this->post('/code/ajax',               App\Controllers\Admin\CodeController::class . ':ajax_code');
-
-        // User Mange
-        $this->get('/user',                     App\Controllers\Admin\UserController::class . ':index');
-        $this->get('/user/{id}/edit',           App\Controllers\Admin\UserController::class . ':edit');
-        $this->put('/user/{id}',                App\Controllers\Admin\UserController::class . ':update');
-        $this->delete('/user',                  App\Controllers\Admin\UserController::class . ':delete');
-        $this->post('/user/changetouser',       App\Controllers\Admin\UserController::class . ':changetouser');
-        $this->post('/user/ajax',               App\Controllers\Admin\UserController::class . ':ajax');
-        $this->post('/user/create',             App\Controllers\Admin\UserController::class . ':createNewUser');
-
-        // Coupon Mange
-        $this->get('/coupon',                   App\Controllers\AdminController::class . ':coupon');
-        $this->post('/coupon',                  App\Controllers\AdminController::class . ':addCoupon');
-        $this->post('/coupon/ajax',             App\Controllers\AdminController::class . ':ajax_coupon');
-
-        // Subscribe Log Mange
-        $this->get('/subscribe',                App\Controllers\Admin\SubscribeLogController::class . ':index');
-        $this->post('/subscribe/ajax',          App\Controllers\Admin\SubscribeLogController::class . ':ajax_subscribe_log');
-
-        // Detect Ban Mange
-        $this->get('/detect/ban',               App\Controllers\Admin\DetectBanLogController::class . ':index');
-        $this->post('/detect/ban/ajax',         App\Controllers\Admin\DetectBanLogController::class . ':ajax_log');
-
-        // 指定用户购买记录以及添加套餐
-        $this->get('/user/{id}/bought',         App\Controllers\Admin\UserLog\BoughtLogController::class . ':bought');
-        $this->post('/user/{id}/bought/ajax',   App\Controllers\Admin\UserLog\BoughtLogController::class . ':bought_ajax');
-        $this->delete('/user/bought',           App\Controllers\Admin\UserLog\BoughtLogController::class . ':bought_delete');
-        $this->post('/user/{id}/bought/buy',    App\Controllers\Admin\UserLog\BoughtLogController::class . ':bought_add');
-
-        // 指定用户充值记录
-        $this->get('/user/{id}/code',           App\Controllers\Admin\UserLog\CodeLogController::class . ':index');
-        $this->post('/user/{id}/code/ajax',     App\Controllers\Admin\UserLog\CodeLogController::class . ':ajax');
-
-        // 指定用户订阅记录
-        $this->get('/user/{id}/sublog',         App\Controllers\Admin\UserLog\SubLogController::class . ':index');
-        $this->post('/user/{id}/sublog/ajax',   App\Controllers\Admin\UserLog\SubLogController::class . ':ajax');
-
-        // 指定用户审计记录
-        $this->get('/user/{id}/detect',         App\Controllers\Admin\UserLog\DetectLogController::class . ':index');
-        $this->post('/user/{id}/detect/ajax',   App\Controllers\Admin\UserLog\DetectLogController::class . ':ajax');
-
-        // 指定用户登录记录
-        $this->get('/user/{id}/login',          App\Controllers\Admin\UserLog\LoginLogController::class . ':index');
-        $this->post('/user/{id}/login/ajax',    App\Controllers\Admin\UserLog\LoginLogController::class . ':ajax');
-
+    $app->group('/admin', static function (RouteCollectorProxy $group): void {
+        $group->get('', App\Controllers\AdminController::class . ':index');
+        $group->get('/', App\Controllers\AdminController::class . ':index');
+        // Node
+        $group->get('/node', App\Controllers\Admin\NodeController::class . ':index');
+        $group->get('/node/create', App\Controllers\Admin\NodeController::class . ':create');
+        $group->post('/node', App\Controllers\Admin\NodeController::class . ':add');
+        $group->get('/node/{id:[0-9]+}/edit', App\Controllers\Admin\NodeController::class . ':edit');
+        $group->post(
+            '/node/{id:[0-9]+}/reset_password',
+            App\Controllers\Admin\NodeController::class . ':resetPassword'
+        );
+        $group->post(
+            '/node/{id:[0-9]+}/reset_bandwidth',
+            App\Controllers\Admin\NodeController::class . ':resetBandwidth'
+        );
+        $group->post('/node/{id:[0-9]+}/copy', App\Controllers\Admin\NodeController::class . ':copy');
+        $group->put('/node/{id:[0-9]+}', App\Controllers\Admin\NodeController::class . ':update');
+        $group->delete('/node/{id:[0-9]+}', App\Controllers\Admin\NodeController::class . ':delete');
+        $group->post('/node/ajax', App\Controllers\Admin\NodeController::class . ':ajax');
+        // Ticket
+        $group->get('/ticket', App\Controllers\Admin\TicketController::class . ':index');
+        $group->post('/ticket', App\Controllers\Admin\TicketController::class . ':add');
+        $group->get('/ticket/{id:[0-9]+}/view', App\Controllers\Admin\TicketController::class . ':detail');
+        $group->put('/ticket/{id:[0-9]+}/close', App\Controllers\Admin\TicketController::class . ':close');
+        $group->put('/ticket/{id:[0-9]+}', App\Controllers\Admin\TicketController::class . ':update');
+        $group->put('/ticket/{id:[0-9]+}/ai', App\Controllers\Admin\TicketController::class . ':updateAI');
+        $group->delete('/ticket/{id:[0-9]+}', App\Controllers\Admin\TicketController::class . ':delete');
+        $group->post('/ticket/ajax', App\Controllers\Admin\TicketController::class . ':ajax');
+        // Ann
+        $group->get('/announcement', App\Controllers\Admin\AnnController::class . ':index');
+        $group->get('/announcement/create', App\Controllers\Admin\AnnController::class . ':create');
+        $group->post('/announcement', App\Controllers\Admin\AnnController::class . ':add');
+        $group->get('/announcement/{id:[0-9]+}/edit', App\Controllers\Admin\AnnController::class . ':edit');
+        $group->put('/announcement/{id:[0-9]+}', App\Controllers\Admin\AnnController::class . ':update');
+        $group->delete('/announcement/{id:[0-9]+}', App\Controllers\Admin\AnnController::class . ':delete');
+        $group->post('/announcement/ajax', App\Controllers\Admin\AnnController::class . ':ajax');
+        // Docs
+        $group->get('/docs', App\Controllers\Admin\DocsController::class . ':index');
+        $group->get('/docs/create', App\Controllers\Admin\DocsController::class . ':create');
+        $group->post('/docs', App\Controllers\Admin\DocsController::class . ':add');
+        $group->post('/docs/generate', App\Controllers\Admin\DocsController::class . ':generate');
+        $group->get('/docs/{id:[0-9]+}/edit', App\Controllers\Admin\DocsController::class . ':edit');
+        $group->put('/docs/{id:[0-9]+}', App\Controllers\Admin\DocsController::class . ':update');
+        $group->delete('/docs/{id:[0-9]+}', App\Controllers\Admin\DocsController::class . ':delete');
+        $group->post('/docs/ajax', App\Controllers\Admin\DocsController::class . ':ajax');
+        // 审计规则
+        $group->get('/detect', App\Controllers\Admin\DetectRuleController::class . ':index');
+        $group->get('/detect/create', App\Controllers\Admin\DetectRuleController::class . ':create');
+        $group->post('/detect/add', App\Controllers\Admin\DetectRuleController::class . ':add');
+        $group->delete('/detect/{id:[0-9]+}', App\Controllers\Admin\DetectRuleController::class . ':delete');
+        $group->post('/detect/ajax', App\Controllers\Admin\DetectRuleController::class . ':ajax');
+        // 审计触发日志
+        $group->get('/detect/log', App\Controllers\Admin\DetectLogController::class . ':index');
+        $group->post('/detect/log/ajax', App\Controllers\Admin\DetectLogController::class . ':ajax');
+        // 审计封禁日志
+        $group->get('/detect/ban', App\Controllers\Admin\DetectBanLogController::class . ':index');
+        $group->post('/detect/ban/ajax', App\Controllers\Admin\DetectBanLogController::class . ':ajax');
+        // User
+        $group->get('/user', App\Controllers\Admin\UserController::class . ':index');
+        $group->get('/user/{id:[0-9]+}/edit', App\Controllers\Admin\UserController::class . ':edit');
+        $group->put('/user/{id:[0-9]+}', App\Controllers\Admin\UserController::class . ':update');
+        $group->post('/user/create', App\Controllers\Admin\UserController::class . ':create');
+        $group->delete('/user/{id}', App\Controllers\Admin\UserController::class . ':delete');
+        $group->post('/user/ajax', App\Controllers\Admin\UserController::class . ':ajax');
+        // Coupon
+        $group->get('/coupon', App\Controllers\Admin\CouponController::class . ':index');
+        $group->post('/coupon', App\Controllers\Admin\CouponController::class . ':add');
+        $group->post('/coupon/ajax', App\Controllers\Admin\CouponController::class . ':ajax');
+        $group->delete('/coupon/{id:[0-9]+}', App\Controllers\Admin\CouponController::class . ':delete');
+        $group->post('/coupon/{id:[0-9]+}/disable', App\Controllers\Admin\CouponController::class . ':disable');
+        // 登录日志
+        $group->get('/login', App\Controllers\Admin\LoginLogController::class . ':index');
+        $group->post('/login/ajax', App\Controllers\Admin\LoginLogController::class . ':ajax');
+        // 在线IP日志
+        $group->get('/online', App\Controllers\Admin\OnlineLogController::class . ':index');
+        $group->post('/online/ajax', App\Controllers\Admin\OnlineLogController::class . ':ajax');
+        // 订阅日志
+        $group->get('/subscribe', App\Controllers\Admin\SubLogController::class . ':index');
+        $group->post('/subscribe/ajax', App\Controllers\Admin\SubLogController::class . ':ajax');
+        // 返利日志
+        $group->get('/payback', App\Controllers\Admin\PaybackController::class . ':index');
+        $group->post('/payback/ajax', App\Controllers\Admin\PaybackController::class . ':ajax');
+        // 用户余额日志
+        $group->get('/money', App\Controllers\Admin\MoneyLogController::class . ':index');
+        $group->post('/money/ajax', App\Controllers\Admin\MoneyLogController::class . ':ajax');
+        // 支付网关日志
+        $group->get('/gateway', App\Controllers\Admin\PaylistController::class . ':index');
+        $group->post('/gateway/ajax', App\Controllers\Admin\PaylistController::class . ':ajax');
+        // 系统日志
+        $group->get('/syslog', App\Controllers\Admin\SysLogController::class . ':index');
+        $group->get('/syslog/{id:[0-9]+}/view', App\Controllers\Admin\SysLogController::class . ':detail');
+        $group->post('/syslog/ajax', App\Controllers\Admin\SysLogController::class . ':ajax');
+        // 系统状态
+        $group->get('/system', App\Controllers\Admin\SystemController::class . ':index');
+        $group->post('/system/check_update', App\Controllers\Admin\SystemController::class . ':checkUpdate');
         // 设置中心
-        $this->get('/setting',                  App\Controllers\Admin\SettingController::class . ':index');
-        $this->post('/setting',                 App\Controllers\Admin\SettingController::class . ':save');
-        $this->post('/setting/email',           App\Controllers\Admin\SettingController::class . ':test');
-        $this->post('/setting/payment',         App\Controllers\Admin\SettingController::class . ':payment');
-
-        // Config Mange
-        $this->group('/config', function () {
-            $this->put('/update/{key}',         App\Controllers\Admin\GConfigController::class . ':update');
-            $this->get('/update/{key}/edit',    App\Controllers\Admin\GConfigController::class . ':edit');
-
-            $this->get('/telegram',             App\Controllers\Admin\GConfigController::class . ':telegram');
-            $this->post('/telegram/ajax',       App\Controllers\Admin\GConfigController::class . ':telegram_ajax');
-        });
+        $group->get('/setting/billing', App\Controllers\Admin\Setting\BillingController::class . ':index');
+        $group->post('/setting/billing', App\Controllers\Admin\Setting\BillingController::class . ':save');
+        $group->post(
+            '/setting/billing/set_stripe_webhook',
+            App\Controllers\Admin\Setting\BillingController::class . ':setStripeWebhook'
+        );
+        $group->get('/setting/captcha', App\Controllers\Admin\Setting\CaptchaController::class . ':index');
+        $group->post('/setting/captcha', App\Controllers\Admin\Setting\CaptchaController::class . ':save');
+        $group->get('/setting/cron', App\Controllers\Admin\Setting\CronController::class . ':index');
+        $group->post('/setting/cron', App\Controllers\Admin\Setting\CronController::class . ':save');
+        $group->get('/setting/email', App\Controllers\Admin\Setting\EmailController::class . ':index');
+        $group->post('/setting/email', App\Controllers\Admin\Setting\EmailController::class . ':save');
+        $group->get('/setting/feature', App\Controllers\Admin\Setting\FeatureController::class . ':index');
+        $group->post('/setting/feature', App\Controllers\Admin\Setting\FeatureController::class . ':save');
+        $group->get('/setting/im', App\Controllers\Admin\Setting\ImController::class . ':index');
+        $group->post('/setting/im', App\Controllers\Admin\Setting\ImController::class . ':save');
+        $group->post(
+            '/setting/im/reset_webhook_token/{type}',
+            App\Controllers\Admin\Setting\ImController::class . ':resetWebhookToken'
+        );
+        $group->post(
+            '/setting/im/set_webhook/{type}',
+            App\Controllers\Admin\Setting\ImController::class . ':setWebhook'
+        );
+        $group->get('/setting/llm', App\Controllers\Admin\Setting\LlmController::class . ':index');
+        $group->post('/setting/llm', App\Controllers\Admin\Setting\LlmController::class . ':save');
+        $group->get('/setting/ref', App\Controllers\Admin\Setting\RefController::class . ':index');
+        $group->post('/setting/ref', App\Controllers\Admin\Setting\RefController::class . ':save');
+        $group->get('/setting/reg', App\Controllers\Admin\Setting\RegController::class . ':index');
+        $group->post('/setting/reg', App\Controllers\Admin\Setting\RegController::class . ':save');
+        $group->get('/setting/sub', App\Controllers\Admin\Setting\SubController::class . ':index');
+        $group->post('/setting/sub', App\Controllers\Admin\Setting\SubController::class . ':save');
+        $group->get('/setting/support', App\Controllers\Admin\Setting\SupportController::class . ':index');
+        $group->post('/setting/support', App\Controllers\Admin\Setting\SupportController::class . ':save');
+        // 设置测试
+        $group->post(
+            '/setting/test/email',
+            App\Controllers\Admin\Setting\EmailController::class . ':testEmail'
+        );
+        $group->post(
+            '/setting/test/telegram',
+            App\Controllers\Admin\Setting\ImController::class . ':testTelegram'
+        );
+        $group->post(
+            '/setting/test/discord',
+            App\Controllers\Admin\Setting\ImController::class . ':testDiscord'
+        );
+        $group->post(
+            '/setting/test/slack',
+            App\Controllers\Admin\Setting\ImController::class . ':testSlack'
+        );
+        // 礼品卡
+        $group->get('/giftcard', App\Controllers\Admin\GiftCardController::class . ':index');
+        $group->post('/giftcard', App\Controllers\Admin\GiftCardController::class . ':add');
+        $group->post('/giftcard/ajax', App\Controllers\Admin\GiftCardController::class . ':ajax');
+        $group->delete('/giftcard/{id:[0-9]+}', App\Controllers\Admin\GiftCardController::class . ':delete');
+        // 商品
+        $group->get('/product', App\Controllers\Admin\ProductController::class . ':index');
+        $group->get('/product/create', App\Controllers\Admin\ProductController::class . ':create');
+        $group->post('/product', App\Controllers\Admin\ProductController::class . ':add');
+        $group->get('/product/{id:[0-9]+}/edit', App\Controllers\Admin\ProductController::class . ':edit');
+        $group->post('/product/{id:[0-9]+}/copy', App\Controllers\Admin\ProductController::class . ':copy');
+        $group->put('/product/{id:[0-9]+}', App\Controllers\Admin\ProductController::class . ':update');
+        $group->delete('/product/{id:[0-9]+}', App\Controllers\Admin\ProductController::class . ':delete');
+        $group->post('/product/ajax', App\Controllers\Admin\ProductController::class . ':ajax');
+        // 订单
+        $group->get('/order', App\Controllers\Admin\OrderController::class . ':index');
+        $group->get('/order/{id:[0-9]+}/view', App\Controllers\Admin\OrderController::class . ':detail');
+        $group->post('/order/{id:[0-9]+}/cancel', App\Controllers\Admin\OrderController::class . ':cancel');
+        $group->delete('/order/{id:[0-9]+}', App\Controllers\Admin\OrderController::class . ':delete');
+        $group->post('/order/ajax', App\Controllers\Admin\OrderController::class . ':ajax');
+        // 账单
+        $group->get('/invoice', App\Controllers\Admin\InvoiceController::class . ':index');
+        $group->get('/invoice/{id:[0-9]+}/view', App\Controllers\Admin\InvoiceController::class . ':detail');
+        $group->post('/invoice/{id:[0-9]+}/mark_paid', App\Controllers\Admin\InvoiceController::class . ':markPaid');
+        $group->post('/invoice/ajax', App\Controllers\Admin\InvoiceController::class . ':ajax');
     })->add(new Admin());
+    // WebAPI
+    $app->group('/mod_mu', static function (RouteCollectorProxy $group): void {
+        // 节点
+        $group->get('/nodes/{id:[0-9]+}/info', App\Controllers\WebAPI\NodeController::class . ':getInfo');
+        // 用户
+        $group->get('/users', App\Controllers\WebAPI\UserController::class . ':index');
+        $group->post('/users/traffic', App\Controllers\WebAPI\UserController::class . ':addTraffic');
+        $group->post('/users/aliveip', App\Controllers\WebAPI\UserController::class . ':addAliveIp');
+        $group->post('/users/detectlog', App\Controllers\WebAPI\UserController::class . ':addDetectLog');
+        // 审计 & 杂七杂八的功能
+        $group->get('/func/detect_rules', App\Controllers\WebAPI\FuncController::class . ':getDetectRules');
+        $group->get('/func/ping', App\Controllers\WebAPI\FuncController::class . ':ping');
+    })->add(new NodeToken());
 
-    if ($_ENV['enableAdminApi']){
-        $app->group('/admin/api', function () {
-            $this->get('/nodes',     App\Controllers\Admin\ApiController::class . ':getNodeList');
-            $this->get('/node/{id}', App\Controllers\Admin\ApiController::class . ':getNodeInfo');
-            $this->get('/ping',      App\Controllers\Admin\ApiController::class . ':ping');
+    // Admin REST API
+    //$app->group('/admin/api/v1', function (RouteCollectorProxy $group): void {
+    //    $group->post('/{action}', App\Controllers\Api\AdminApiV1Controller::class . ':actionHandler');
+    //})->add(new AdminApi());
 
-            // Re-bind controller, bypass admin token require
-            $this->post('/node',       App\Controllers\Admin\NodeController::class . ':add');
-            $this->put('/node/{id}',   App\Controllers\Admin\NodeController::class . ':update');
-            $this->delete('/node',     App\Controllers\Admin\NodeController::class . ':delete');
-        })->add(new AuthorizationBearer($_ENV['adminApiToken']));
-    }
+    // User REST API
+    //$app->group('/user/api/v1', function (RouteCollectorProxy $group): void {
+    //    $group->post('/{action}', App\Controllers\Api\UserApiV1Controller::class . ':actionHandler');
+    //})->add(new UserApi());
 
-    // mu
-    $app->group('/mod_mu', function () {
-        // 流媒体检测
-        $this->post('/media/saveReport',    App\Controllers\Mod_Mu\NodeController::class . ':saveReport');
-        // 其他
-        $this->get('/nodes/{id}/info',      App\Controllers\Mod_Mu\NodeController::class . ':get_info');
-        $this->post('/nodes/{id}/info',     App\Controllers\Mod_Mu\NodeController::class . ':info');
-        $this->get('/nodes',                App\Controllers\Mod_Mu\NodeController::class . ':get_all_info');
-        $this->post('/nodes/config',        App\Controllers\Mod_Mu\NodeController::class . ':getConfig');
-
-        $this->get('/users',                App\Controllers\Mod_Mu\UserController::class . ':index');
-        $this->post('/users/traffic',       App\Controllers\Mod_Mu\UserController::class . ':addTraffic');
-        $this->post('/users/aliveip',       App\Controllers\Mod_Mu\UserController::class . ':addAliveIp');
-        $this->post('/users/detectlog',     App\Controllers\Mod_Mu\UserController::class . ':addDetectLog');
-
-        $this->get('/func/detect_rules',    App\Controllers\Mod_Mu\FuncController::class . ':get_detect_logs');
-        $this->post('/func/block_ip',       App\Controllers\Mod_Mu\FuncController::class . ':addBlockIp');
-        $this->get('/func/block_ip',        App\Controllers\Mod_Mu\FuncController::class . ':get_blockip');
-        $this->get('/func/unblock_ip',      App\Controllers\Mod_Mu\FuncController::class . ':get_unblockip');
-        $this->get('/func/ping',            App\Controllers\Mod_Mu\FuncController::class . ':ping');
-        //============================================
-    })->add(new Mod_Mu());
-
-    $app->group('/link', function () {
-        $this->get('/{token}',              App\Controllers\LinkController::class . ':GetContent');
-    });
-
-    //通用訂閲
-    $app->group('/sub', function () {
-        $this->get('/{token}/{subtype}',    App\Controllers\SubController::class . ':getContent');
-    });
-
-    $app->group('/getClient', function () {
-        $this->get('/{token}',              App\Controllers\UserController::class . ':getClientfromToken');
-    });
+    // WebAPI V2(Aka Node API V1)
+    //$app->group('/node/api/v1', function (RouteCollectorProxy $group): void {
+    //    $group->put('/heartbeat', App\Controllers\Api\NodeApiV1Controller::class . ':getHeartbeat');
+    //    $group->get('/info', App\Controllers\Api\NodeApiV1Controller::class . ':getInfo');
+    //    $group->get('/user', App\Controllers\Api\NodeApiV1Controller::class . ':getUser');
+    //    $group->get('/detect_rule', App\Controllers\Api\NodeApiV1Controller::class . ':getDetectRule');
+    //    $group->post('/user/traffic', App\Controllers\Api\NodeApiV1Controller::class . ':addUserTraffic');
+    //    $group->post('/user/online_ip', App\Controllers\Api\NodeApiV1Controller::class . ':addUserOnlineIp');
+    //    $group->post('/user/detect_log', App\Controllers\Api\NodeApiV1Controller::class . ':addUserDetectLog');
+    //})->add(new NodeApi());
 };

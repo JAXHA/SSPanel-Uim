@@ -1,21 +1,22 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Mail;
 
-class NullMail extends Base
+final class NullMail extends Base
 {
-
     public function __construct()
     {
     }
 
-    public function getConfig()
+    public function getConfig(): array
     {
         return [
         ];
     }
 
-    public function send($to_address, $subject_raw, $text, $files)
+    public function send($to, $subject, $body): void
     {
         echo '';
     }

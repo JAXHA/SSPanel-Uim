@@ -1,55 +1,40 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Mail;
 
-use App\Models\Setting;
-use App\Services\Config;
+use App\Models\Config;
+use SendGrid as SG;
+use SendGrid\Mail\Mail;
+use SendGrid\Mail\TypeException;
 
-class SendGrid extends Base
+final class SendGrid extends Base
 {
-    private $config;
-    private $sg;
-    private $sender;
-    private $name;
+    private SG $sg;
+    private Mail $email;
 
+    /**
+     * @throws TypeException
+     */
     public function __construct()
     {
-        $this->config = $this->getConfig();
-        $this->sg = new \SendGrid($this->config['key']);
-        $this->sender = $this->config['sender'];
-        $this->name = $this->config['name'];
-        $this->email = new \SendGrid\Mail\Mail();
+        $configs = Config::getClass('email');
+
+        $this->sg = new SG($configs['sendgrid_key']);
+        $this->email = new Mail();
+        $this->email->setFrom($configs['sendgrid_sender'], $configs['sendgrid_name']);
     }
 
-    public function getConfig()
+    /**
+     * @throws TypeException
+     */
+    public function send($to, $subject, $body): void
     {
-        $configs = Setting::getClass('sendgrid');
-        
-        return [
-            'key' => $configs['sendgrid_key'],
-            'sender' => $configs['sendgrid_sender'],
-            'name' => $configs['sendgrid_name']
-        ];
-    }
+        $this->email->setSubject($subject);
+        $this->email->addTo($to);
+        $this->email->addContent('text/html', $body);
 
-    public function send($to_address, $subject_raw, $text, $files)
-    {
-        $this->email->setFrom($this->sender, $this->name);
-        $this->email->setSubject($subject_raw);
-        $this->email->addTo($to_address,null);
-        $this->email->addContent('text/html', $text);	
-		
-        foreach ($files as $file) {
-            $this->email->addAttachment(
-                base64_encode(file_get_contents($file)),
-                'application/octet-stream',
-                basename($file),
-                'attachment',
-                'backup'
-            );
-        }
-
-        $response = $this->sg->send($this->email);
-        echo $response->body();
+        $this->sg->send($this->email);
     }
 }
